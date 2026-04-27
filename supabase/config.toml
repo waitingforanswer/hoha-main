@@ -1,0 +1,19 @@
+project_id = "jtftimlwqqfbjerypcqd"
+
+[functions.custom-auth]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = false
+
+[functions.get-family-members]
+verify_jwt = false
+
+[functions.get-family-member]
+verify_jwt = false
+
+[functions.get-user-permissions]
+verify_jwt = false
+
+[functions.manage-family-member]
+verify_jwt = false
