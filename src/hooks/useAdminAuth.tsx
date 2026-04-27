@@ -199,7 +199,7 @@ export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem(ADMIN_APP_PERMISSIONS_KEY, JSON.stringify(perms));
         } else if (isAdmin) {
           // Admin has all permissions
-          setPermissions(['MANAGE_MEMBERS', 'MANAGE_USERS', 'MANAGE_POSTS']);
+          setPermissions(['MANAGE_MEMBERS', 'MANAGE_USERS', 'MANAGE_POSTS', 'MANAGE_FOOTER', 'MANAGE_PAGES']);
         }
       }
     } catch (error) {
@@ -251,7 +251,7 @@ export const AdminAuthProvider = ({ children }: { children: ReactNode }) => {
       if (isSubAdmin && !isAdmin) {
         userPermissions = await fetchAppUserPermissions(userId);
       } else if (isAdmin) {
-        userPermissions = ['MANAGE_MEMBERS', 'MANAGE_USERS', 'MANAGE_POSTS'];
+        userPermissions = ['MANAGE_MEMBERS', 'MANAGE_USERS', 'MANAGE_POSTS', 'MANAGE_FOOTER', 'MANAGE_PAGES'];
       }
 
       // Save to state and localStorage

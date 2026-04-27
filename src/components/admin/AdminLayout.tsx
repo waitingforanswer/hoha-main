@@ -104,16 +104,28 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
   // Settings submenu - filtered based on role and permissions
   const settingsSubMenu: MenuItem[] = [];
-  
+
   // Admin-only items
   if (isAdmin) {
     settingsSubMenu.push(
-      { icon: Navigation, label: "Menu điều hướng", path: "/admin/settings/menu" },
-      { icon: Footprints, label: "Footer", path: "/admin/settings/footer" },
+      { icon: Navigation, label: "Menu điều hướng", path: "/admin/settings/menu" }
+    );
+  }
+
+  // Footer - visible to admin or users with MANAGE_FOOTER permission
+  if (isAdmin || hasPermission('MANAGE_FOOTER')) {
+    settingsSubMenu.push(
+      { icon: Footprints, label: "Footer", path: "/admin/settings/footer" }
+    );
+  }
+
+  // Pages - visible to admin or users with MANAGE_PAGES permission
+  if (isAdmin || hasPermission('MANAGE_PAGES')) {
+    settingsSubMenu.push(
       { icon: File, label: "Trang", path: "/admin/settings/pages" }
     );
   }
-  
+
   // Người dùng - visible to admin or users with MANAGE_USERS permission
   if (isAdmin || hasPermission('MANAGE_USERS')) {
     settingsSubMenu.push({ icon: UserCog, label: "Người dùng", path: "/admin/settings" });

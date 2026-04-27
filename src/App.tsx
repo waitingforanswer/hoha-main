@@ -97,42 +97,42 @@ const App = () => (
                     </AdminProtectedRoute>
                   } 
                 />
-                <Route 
-                  path="/admin/settings/footer" 
+                <Route
+                  path="/admin/settings/footer"
                   element={
-                    <AdminProtectedRoute requireAdmin>
+                    <AdminProtectedRoute requiredPermission="MANAGE_FOOTER">
                       <FooterManagement />
                     </AdminProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/settings/pages" 
+                <Route
+                  path="/admin/settings/pages"
                   element={
-                    <AdminProtectedRoute requireAdmin>
+                    <AdminProtectedRoute requiredPermission="MANAGE_PAGES">
                       <PagesManagement />
                     </AdminProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/settings/pages/homepage" 
+                <Route
+                  path="/admin/settings/pages/homepage"
                   element={
-                    <AdminProtectedRoute requireAdmin>
+                    <AdminProtectedRoute requiredPermission="MANAGE_PAGES">
                       <HomepageManagement />
                     </AdminProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/settings/pages/gioi-thieu" 
+                <Route
+                  path="/admin/settings/pages/gioi-thieu"
                   element={
-                    <AdminProtectedRoute requireAdmin>
+                    <AdminProtectedRoute requiredPermission="MANAGE_PAGES">
                       <AboutManagement />
                     </AdminProtectedRoute>
-                  } 
+                  }
                 />
                 <Route 
                   path="/admin/posts" 
                   element={
-                    <AdminProtectedRoute requireAdmin>
+                    <AdminProtectedRoute requiredPermission="MANAGE_POSTS">
                       <PostsManagement />
                     </AdminProtectedRoute>
                   } 
