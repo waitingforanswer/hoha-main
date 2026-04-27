@@ -1,9 +1,16 @@
-import { useRef, useState } from "react";
-import { format, parseISO, getMonth, getYear, isBefore, isAfter, addYears, isSameDay, startOfDay } from "date-fns";
-import { vi } from "date-fns/locale";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+import {
+  format,
+  parseISO,
+  getMonth,
+  getYear,
+  isBefore,
+  addYears,
+  isSameDay,
+  startOfDay,
+  differenceInCalendarDays,
+} from "date-fns";
+import { Calendar, Repeat } from "lucide-react";
 
 interface FamilyEvent {
   id: string;
@@ -17,219 +24,552 @@ interface EventTimelineProps {
   events: FamilyEvent[];
 }
 
-type EventStatus = 'past' | 'current' | 'upcoming';
+type EventStatus = "past" | "current" | "upcoming";
 
-const EventTimeline = ({ events }: EventTimelineProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
+interface ProcessedEvent extends FamilyEvent {
+  displayDate: Date;
+  status: EventStatus;
+  monthNum: number;
+  color: string;
+  colorLight: string;
+}
 
-  const handleScroll = () => {
-    if (scrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-      setCanScrollLeft(scrollLeft > 0);
-      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-    }
-  };
+const STATUS_COLOR: Record<EventStatus, { main: string; light: string }> = {
+  past:     { main: "hsl(25 15% 65%)",  light: "hsl(25 15% 94%)"  },
+  current:  { main: "hsl(0 72% 42%)",   light: "hsl(0 72% 97%)"   },
+  upcoming: { main: "hsl(38 70% 45%)",  light: "hsl(38 70% 96%)"  },
+};
 
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const scrollAmount = 300;
-      scrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
-    }
-  };
+const MONTH_LABELS = ["","Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
 
-  // Get event status based on date
-  const getEventStatus = (displayDate: Date): EventStatus => {
-    const today = startOfDay(new Date());
-    const eventDay = startOfDay(displayDate);
-    
-    if (isSameDay(eventDay, today)) {
-      return 'current';
-    } else if (isBefore(eventDay, today)) {
-      return 'past';
-    } else {
-      return 'upcoming';
-    }
-  };
 
-  // Get status-based styles
-  const getStatusStyles = (status: EventStatus) => {
-    switch (status) {
-      case 'past':
-        return {
-          circle: 'bg-muted text-muted-foreground',
-          card: 'border-muted bg-muted/30 opacity-60',
-          label: 'text-muted-foreground',
-        };
-      case 'current':
-        return {
-          circle: 'bg-gradient-to-br from-gold to-gold/80 text-accent-foreground ring-4 ring-gold/30',
-          card: 'border-gold bg-gold/5 shadow-lg',
-          label: 'text-gold',
-        };
-      case 'upcoming':
-        return {
-          circle: 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground',
-          card: 'border-border bg-background',
-          label: 'text-primary',
-        };
-    }
-  };
+function processEvents(events: FamilyEvent[]): ProcessedEvent[] {
+  const today = new Date();
+  const todayStart = startOfDay(today);
 
-  // Process events - for recurring events, calculate next occurrence
-  const processedEvents = events.map(event => {
-    const eventDate = parseISO(event.event_date);
-    const today = new Date();
-    
-    let displayDate = eventDate;
-    
-    if (event.is_recurring) {
-      // For recurring events, find the next occurrence
-      const thisYearDate = new Date(getYear(today), getMonth(eventDate), eventDate.getDate());
-      
-      if (isBefore(thisYearDate, today)) {
-        // If this year's date has passed, show next year
-        displayDate = addYears(thisYearDate, 1);
-      } else {
-        displayDate = thisYearDate;
+  return events
+    .map((event) => {
+      const eventDate = parseISO(event.event_date);
+      let displayDate = eventDate;
+
+      if (event.is_recurring) {
+        const thisYear = new Date(
+          getYear(today),
+          getMonth(eventDate),
+          eventDate.getDate()
+        );
+        displayDate = isBefore(thisYear, todayStart)
+          ? addYears(thisYear, 1)
+          : thisYear;
       }
-    }
-    
-    const status = getEventStatus(displayDate);
-    
-    return {
-      ...event,
-      displayDate,
-      originalDate: eventDate,
-      status
-    };
-  }).sort((a, b) => a.displayDate.getTime() - b.displayDate.getTime());
 
-  if (processedEvents.length === 0) {
-    return null;
-  }
+      const displayStart = startOfDay(displayDate);
+      let status: EventStatus;
+      if (isSameDay(displayStart, todayStart)) {
+        status = "current";
+      } else if (isBefore(displayStart, todayStart)) {
+        status = "past";
+      } else {
+        status = "upcoming";
+      }
 
-  const getMonthName = (date: Date) => {
-    return format(date, 'MMMM', { locale: vi });
-  };
+      const { main, light } = STATUS_COLOR[status];
+      return {
+        ...event,
+        displayDate,
+        status,
+        monthNum: displayDate.getMonth() + 1,
+        color: main,
+        colorLight: light,
+      };
+    })
+    .sort((a, b) => a.displayDate.getTime() - b.displayDate.getTime());
+}
 
-  const getDay = (date: Date) => {
-    return format(date, 'dd');
-  };
+/* ── Ornament line ── */
+function OrnamentLine() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        justifyContent: "center",
+        marginBottom: 16,
+      }}
+    >
+      <div
+        style={{
+          height: 1,
+          width: 60,
+          background: "linear-gradient(to right, transparent, hsl(38 70% 50% / 0.5))",
+        }}
+      />
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path
+          d="M10 2 L12 8 L18 8 L13 12 L15 18 L10 14 L5 18 L7 12 L2 8 L8 8 Z"
+          fill="hsl(38 70% 50%)"
+          opacity="0.7"
+        />
+      </svg>
+      <div
+        style={{
+          height: 1,
+          width: 60,
+          background: "linear-gradient(to left, transparent, hsl(38 70% 50% / 0.5))",
+        }}
+      />
+    </div>
+  );
+}
+
+/* ── Next event countdown banner ── */
+function NextEventBanner({ events }: { events: ProcessedEvent[] }) {
+  const today = startOfDay(new Date());
+
+  const nearest = events
+    .filter((e) => e.status === "current" || e.status === "upcoming")
+    .sort((a, b) => a.displayDate.getTime() - b.displayDate.getTime())[0];
+
+  if (!nearest) return null;
+
+  const days = differenceInCalendarDays(startOfDay(nearest.displayDate), today);
 
   return (
-    <section className="py-16 md:py-24 bg-secondary/50">
-      <div className="container">
-        <div className="mx-auto mb-12 max-w-2xl text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm text-primary">
-            <Calendar className="h-4 w-4" />
-            <span>Lịch Dòng Họ</span>
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        background: `${nearest.color}0f`,
+        border: `1.5px solid ${nearest.color}28`,
+        borderRadius: 12,
+        padding: "10px 16px",
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: nearest.color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Calendar size={17} color="white" />
+      </div>
+      <div>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.07em",
+            color: nearest.color,
+            textTransform: "uppercase",
+            lineHeight: 1,
+            marginBottom: 3,
+          }}
+        >
+          Sắp tới
+        </div>
+        <div
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "hsl(25 30% 15%)",
+            lineHeight: 1.2,
+          }}
+        >
+          {nearest.title}
+        </div>
+        <div style={{ fontSize: 11, color: "hsl(25 15% 45%)", marginTop: 2 }}>
+          {format(nearest.displayDate, "dd")} tháng{" "}
+          {nearest.displayDate.getMonth() + 1}
+        </div>
+      </div>
+      <div
+        style={{
+          marginLeft: 6,
+          paddingLeft: 12,
+          borderLeft: `1.5px solid ${nearest.color}25`,
+          textAlign: "center",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 26,
+            fontWeight: 900,
+            color: nearest.color,
+            lineHeight: 1,
+          }}
+        >
+          {days}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "hsl(25 15% 45%)",
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ngày nữa
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Month filter tabs ── */
+function MonthFilters({
+  activeMonth,
+  onChange,
+  availableMonths,
+}: {
+  activeMonth: number | null;
+  onChange: (m: number | null) => void;
+  availableMonths: number[];
+}) {
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: "8px 18px",
+    borderRadius: 99,
+    border: `1.5px solid ${active ? "hsl(0 72% 42%)" : "hsl(30 25% 85%)"}`,
+    background: active ? "hsl(0 72% 42%)" : "transparent",
+    color: active ? "white" : "hsl(25 15% 45%)",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "'Be Vietnam Pro', sans-serif",
+    transition: "all 0.2s",
+  });
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+      }}
+    >
+      <button style={pillStyle(activeMonth === null)} onClick={() => onChange(null)}>
+        Tất cả
+      </button>
+      {availableMonths.map((m) => (
+        <button key={m} style={pillStyle(activeMonth === m)} onClick={() => onChange(m)}>
+          {MONTH_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── Compact card ── */
+function CompactCard({
+  event,
+  index,
+}: {
+  event: ProcessedEvent;
+  index: number;
+}) {
+  const [hov, setHov] = useState(false);
+  const { color, colorLight } = event;
+  const isPast = event.status === "past";
+
+  const descStyle: React.CSSProperties = hov
+    ? { fontSize: 13, color: "hsl(25 15% 45%)", lineHeight: 1.6 }
+    : {
+        fontSize: 13,
+        color: "hsl(25 15% 45%)",
+        lineHeight: 1.6,
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden",
+      };
+
+  return (
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: hov ? colorLight : "hsl(38 50% 99%)",
+        border: `1.5px solid ${hov ? color : "hsl(30 25% 88%)"}`,
+        borderRadius: 14,
+        padding: "16px 20px",
+        display: "flex",
+        gap: 18,
+        alignItems: hov ? "flex-start" : "center",
+        transition: "all 0.25s ease",
+        transform: hov ? "translateY(-4px)" : "translateY(0)",
+        boxShadow: hov
+          ? `0 6px 24px -4px ${color}35`
+          : "0 1px 6px hsl(25 30% 20% / 0.06)",
+        opacity: isPast ? 0.65 : 1,
+        animation: `fadeUp 0.4s ${index * 50}ms ease-out both`,
+      }}
+    >
+      {/* Date bubble */}
+      <div
+        style={{
+          width: 54,
+          height: 54,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: hov ? color : "transparent",
+          border: `2px solid ${hov ? color : `${color}40`}`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.25s",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 20,
+            fontWeight: 900,
+            lineHeight: 1,
+            color: hov ? "white" : color,
+            transition: "color 0.25s",
+          }}
+        >
+          {format(event.displayDate, "dd")}
+        </span>
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: "0.05em",
+            color: hov ? "rgba(255,255,255,0.75)" : `${color}90`,
+            marginTop: 2,
+            transition: "color 0.25s",
+          }}
+        >
+          T.{format(event.displayDate, "M")}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 4,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: 15,
+              fontWeight: 700,
+              color: hov ? color : "hsl(25 30% 15%)",
+              transition: "color 0.25s",
+            }}
+          >
+            {event.title}
+          </span>
+          {event.is_recurring && (
+            <Repeat
+              size={11}
+              color="hsl(25 15% 55%)"
+              style={{ flexShrink: 0 }}
+            />
+          )}
+        </div>
+        {event.description && <p style={descStyle}>{event.description}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main export ── */
+const EventTimeline = ({ events }: EventTimelineProps) => {
+  const [activeMonth, setActiveMonth] = useState<number | null>(null);
+
+  const processed = processEvents(events);
+  if (processed.length === 0) return null;
+
+  const availableMonths = [
+    ...new Set(processed.map((e) => e.monthNum)),
+  ].sort((a, b) => a - b);
+
+  const filtered = activeMonth
+    ? processed.filter((e) => e.monthNum === activeMonth)
+    : processed;
+
+  return (
+    <section
+      style={{
+        padding: "64px 0 72px",
+        background:
+          "linear-gradient(180deg, hsl(38 45% 91%) 0%, hsl(38 40% 87%) 100%)",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Decorative circles */}
+      <div
+        style={{
+          position: "absolute",
+          top: -80,
+          right: -80,
+          width: 400,
+          height: 400,
+          borderRadius: "50%",
+          background: "hsl(0 72% 42% / 0.04)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: -60,
+          left: -60,
+          width: 300,
+          height: 300,
+          borderRadius: "50%",
+          background: "hsl(38 70% 50% / 0.05)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <div className="container" style={{ position: "relative" }}>
+        {/* Heading */}
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "hsl(0 72% 42% / 0.08)",
+              border: "1px solid hsl(0 72% 42% / 0.18)",
+              borderRadius: 99,
+              padding: "7px 18px",
+              marginBottom: 20,
+            }}
+          >
+            <Calendar size={14} color="hsl(0 72% 42%)" />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.07em",
+                color: "hsl(0 72% 42%)",
+                textTransform: "uppercase",
+              }}
+            >
+              Lịch Dòng Họ
+            </span>
           </div>
-          <h2 className="mb-4 font-serif text-3xl font-bold md:text-4xl">
-            Các <span className="text-primary">Ngày Quan Trọng</span>
+          <h2
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: "clamp(28px, 4.5vw, 46px)",
+              fontWeight: 700,
+              lineHeight: 1.1,
+              marginBottom: 16,
+              color: "hsl(25 30% 15%)",
+            }}
+          >
+            Các{" "}
+            <span
+              style={{
+                background:
+                  "linear-gradient(135deg, hsl(0 72% 42%), hsl(38 70% 45%))",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Ngày Quan Trọng
+            </span>
           </h2>
-          <p className="text-muted-foreground">
+          <OrnamentLine />
+          <p
+            style={{
+              color: "hsl(25 15% 45%)",
+              fontSize: 15,
+              lineHeight: 1.6,
+              maxWidth: 520,
+              margin: "0 auto 32px",
+            }}
+          >
             Những ngày giỗ, lễ hội, họp mặt dòng họ cần nhớ
           </p>
         </div>
 
-        {/* Timeline Container */}
-        <div className="relative">
-          {/* Scroll Buttons */}
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              "absolute -left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background shadow-lg transition-opacity",
-              !canScrollLeft && "opacity-0 pointer-events-none"
-            )}
-            onClick={() => scroll('left')}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              "absolute -right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background shadow-lg transition-opacity",
-              !canScrollRight && "opacity-0 pointer-events-none"
-            )}
-            onClick={() => scroll('right')}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
+        {/* Banner + filter row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            marginBottom: 32,
+            flexWrap: "wrap",
+          }}
+        >
+          <NextEventBanner events={processed} />
+          <MonthFilters
+            activeMonth={activeMonth}
+            onChange={setActiveMonth}
+            availableMonths={availableMonths}
+          />
+        </div>
 
-          {/* Scrollable Timeline */}
-          <div 
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide scroll-smooth px-2"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        {/* Scrollable list */}
+        <div style={{ position: "relative" }}>
+          <div
+            style={{
+              maxHeight: "306px",
+              overflowY: "auto",
+              paddingRight: 4,
+              scrollbarWidth: "thin",
+              scrollbarColor: "hsl(38 50% 70%) transparent",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
           >
-            {processedEvents.map((event) => {
-              const styles = getStatusStyles(event.status);
-              
-              return (
-                <div 
-                  key={event.id} 
-                  className="flex-shrink-0 w-64 md:w-72"
-                >
-                  <div className="relative group">
-                    {/* Timeline Line */}
-                    <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2">
-                      <div className={cn(
-                        "h-8 w-px bg-gradient-to-b from-transparent",
-                        event.status === 'current' ? 'to-gold/50' : 
-                        event.status === 'past' ? 'to-muted' : 'to-primary/50'
-                      )} />
-                    </div>
-                    
-                    {/* Date Circle */}
-                    <div className="relative flex flex-col items-center">
-                      <div className={cn(
-                        "relative z-10 flex h-16 w-16 flex-col items-center justify-center rounded-full shadow-lg transition-transform group-hover:scale-110",
-                        styles.circle
-                      )}>
-                        <span className="text-xl font-bold leading-none">
-                          {getDay(event.displayDate)}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider opacity-90">
-                          Tháng {format(event.displayDate, 'M')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Event Card */}
-                    <div className={cn(
-                      "mt-4 rounded-xl p-4 shadow-md transition-all duration-300 group-hover:shadow-elegant group-hover:-translate-y-1 border",
-                      styles.card
-                    )}>
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className={cn("text-xs font-medium uppercase tracking-wider", styles.label)}>
-                          {getMonthName(event.displayDate)} {format(event.displayDate, 'yyyy')}
-                        </span>
-                      </div>
-                      <h3 className="mb-2 font-serif text-lg font-semibold line-clamp-2">
-                        {event.title}
-                      </h3>
-                      {event.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {event.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {filtered.map((event, i) => (
+              <CompactCard key={event.id} event={event} index={i} />
+            ))}
           </div>
+          {/* Fade hint at bottom */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 48,
+              background:
+                "linear-gradient(to top, hsl(38 40% 87%), transparent)",
+              pointerEvents: "none",
+              borderRadius: "0 0 8px 8px",
+            }}
+          />
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </section>
   );
 };
