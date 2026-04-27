@@ -17,12 +17,10 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Fetch total members and generations
     const membersRes = await supabase
       .from("family_members")
-      .select("generation", { count: "exact" });
+      .select("generation");
 
-    // Fetch total posts
     const postsRes = await supabase
       .from("posts")
       .select("id", { count: "exact" });

@@ -14,7 +14,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await supabase.functions.invoke("admin/dashboard-stats");
+        const response = await supabase.functions.invoke("admin-dashboard-stats");
         if (response.error) throw response.error;
         setStats(response.data);
       } catch (error) {
