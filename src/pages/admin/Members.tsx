@@ -437,7 +437,12 @@ const AdminMembers = () => {
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatUpdatedAt(member.updated_at)}
+                      <div>{formatUpdatedAt(member.updated_at)}</div>
+                      {(member as any).updated_by_username && (
+                        <div className="text-xs text-muted-foreground/70">
+                          bởi {(member as any).updated_by_username}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-2">

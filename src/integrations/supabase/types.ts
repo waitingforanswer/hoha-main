@@ -390,6 +390,8 @@ export type Database = {
           phone: string | null
           spouse_id: string | null
           updated_at: string
+          updated_by_user_id: string | null
+          updated_by_username: string | null
         }
         Insert: {
           address?: string | null
@@ -413,6 +415,8 @@ export type Database = {
           phone?: string | null
           spouse_id?: string | null
           updated_at?: string
+          updated_by_user_id?: string | null
+          updated_by_username?: string | null
         }
         Update: {
           address?: string | null
@@ -436,6 +440,8 @@ export type Database = {
           phone?: string | null
           spouse_id?: string | null
           updated_at?: string
+          updated_by_user_id?: string | null
+          updated_by_username?: string | null
         }
         Relationships: [
           {

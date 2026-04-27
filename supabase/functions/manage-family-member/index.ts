@@ -31,10 +31,11 @@ Deno.serve(async (req) => {
     // Check if it's a Supabase Auth token or app_user session token
     let hasPermission = false;
     let userId: string | null = null;
+    let updatedByUsername: string | null = null;
 
     // Try Supabase Auth first
     const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    
+
     if (user) {
       userId = user.id;
       // Check if user is admin
@@ -43,12 +44,19 @@ Deno.serve(async (req) => {
         hasPermission = true;
       } else {
         // Check if user has MANAGE_MEMBERS permission
-        const { data: hasPerm } = await supabaseAdmin.rpc("has_permission", { 
-          _user_id: user.id, 
-          _permission_code: "MANAGE_MEMBERS" 
+        const { data: hasPerm } = await supabaseAdmin.rpc("has_permission", {
+          _user_id: user.id,
+          _permission_code: "MANAGE_MEMBERS"
         });
         hasPermission = !!hasPerm;
       }
+      // Get display name from profiles table
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", user.id)
+        .single();
+      updatedByUsername = profile?.full_name || profile?.email || user.email || userId;
     } else {
       // Try app_user session token
       const { data: session } = await supabaseAdmin
@@ -59,13 +67,21 @@ Deno.serve(async (req) => {
 
       if (session && new Date(session.expires_at) > new Date()) {
         userId = session.app_user_id;
-        
+
         // Check if app_user has MANAGE_MEMBERS permission
         const { data: hasPerm } = await supabaseAdmin.rpc("app_user_has_permission", {
           _user_id: session.app_user_id,
           _permission_code: "MANAGE_MEMBERS"
         });
         hasPermission = !!hasPerm;
+
+        // Get username from app_users table
+        const { data: appUser } = await supabaseAdmin
+          .from("app_users")
+          .select("username")
+          .eq("id", session.app_user_id)
+          .single();
+        updatedByUsername = appUser?.username || null;
       }
     }
 
@@ -85,10 +101,14 @@ Deno.serve(async (req) => {
       case "create":
         const { data: newMember, error: createError } = await supabaseAdmin
           .from("family_members")
-          .insert(memberData)
+          .insert({
+            ...memberData,
+            updated_by_user_id: userId,
+            updated_by_username: updatedByUsername,
+          })
           .select()
           .single();
-        
+
         if (createError) throw createError;
         result = newMember;
         console.log("Created member:", newMember.id);
@@ -101,14 +121,18 @@ Deno.serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        
+
         const { data: updatedMember, error: updateError } = await supabaseAdmin
           .from("family_members")
-          .update(memberData)
+          .update({
+            ...memberData,
+            updated_by_user_id: userId,
+            updated_by_username: updatedByUsername,
+          })
           .eq("id", memberId)
           .select()
           .single();
-        
+
         if (updateError) throw updateError;
         result = updatedMember;
         console.log("Updated member:", memberId);
