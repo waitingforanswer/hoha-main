@@ -13,19 +13,13 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [membersRes, postsRes] = await Promise.all([
-        supabase.from("family_members").select("generation"),
-        supabase.from("posts").select("id", { count: "exact" }),
-      ]);
-
-      const members = membersRes.data || [];
-      const generations = new Set(members.map((m) => m.generation));
-
-      setStats({
-        totalMembers: members.length,
-        totalPosts: postsRes.count || 0,
-        totalGenerations: generations.size,
-      });
+      try {
+        const response = await supabase.functions.invoke("admin/dashboard-stats");
+        if (response.error) throw response.error;
+        setStats(response.data);
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+      }
     };
 
     fetchStats();
